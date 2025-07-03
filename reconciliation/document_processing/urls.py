@@ -17,4 +17,10 @@ urlpatterns = [
 
     # Process attachments from GRN table
     path('api/process-attachments-from-grn-table/', attachment_api_views.ProcessAttachmentsFromGrnTableAPI.as_view(), name='process_attachments_from_grn_table'),
+
+    # Async invoice-GRN reconciliation
+    path('api/async-invoice-reconciliation/', invoice_recon_views.AsyncReconciliationAPI.as_view(), name='async_invoice_reconciliation'),
+
+    # Reconciliation status API
+    path('api/reconciliation-status/', invoice_recon_views.ReconciliationStatusAPI.as_view(), name='reconciliation_status'),
 ]
