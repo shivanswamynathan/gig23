@@ -1210,3 +1210,607 @@ class InvoiceItemData(models.Model):
         if self.igst_amount:
             total += self.igst_amount
         return total if total > 0 else None
+
+
+
+class InvoiceGrnReconciliation(models.Model):
+    """
+    Model to store invoice-level reconciliation between InvoiceData and ItemWiseGrn
+    """
+    
+    # === MATCHING KEYS ===
+    po_number = models.CharField(
+        max_length=200,
+        verbose_name="PO Number",
+        db_index=True,
+        help_text="Purchase Order Number used for matching"
+    )
+    
+    grn_number = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        verbose_name="GRN Number",
+        db_index=True,
+        help_text="Goods Receipt Note Number"
+    )
+    
+    invoice_number = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        verbose_name="Invoice Number",
+        db_index=True,
+        help_text="Invoice Number from both sources"
+    )
+    
+    # === REFERENCE TO SOURCE RECORDS ===
+    invoice_data = models.ForeignKey(
+        'document_processing.InvoiceData',
+        on_delete=models.CASCADE,
+        verbose_name="Invoice Data",
+        help_text="Reference to the invoice record"
+    )
+    
+    # === MATCH STATUS ===
+    MATCH_STATUS_CHOICES = [
+        ('perfect_match', 'Perfect Match'),
+        ('partial_match', 'Partial Match'),
+        ('amount_mismatch', 'Amount Mismatch'),
+        ('vendor_mismatch', 'Vendor Mismatch'),
+        ('date_mismatch', 'Date Mismatch'),
+        ('no_grn_found', 'No GRN Found'),
+        ('multiple_grn', 'Multiple GRN Records'),
+        ('no_match', 'No Match'),
+    ]
+    
+    match_status = models.CharField(
+        max_length=50,
+        choices=MATCH_STATUS_CHOICES,
+        default='no_match',
+        verbose_name="Match Status",
+        db_index=True
+    )
+    
+    # === VENDOR VALIDATION ===
+    vendor_match = models.BooleanField(
+        default=False,
+        verbose_name="Vendor Match",
+        help_text="Whether vendor names match"
+    )
+    
+    invoice_vendor = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Invoice Vendor"
+    )
+    
+    grn_vendor = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="GRN Vendor"
+    )
+    
+    # === GST VALIDATION ===
+    gst_match = models.BooleanField(
+        default=False,
+        verbose_name="GST Match",
+        help_text="Whether GST numbers match"
+    )
+    
+    invoice_gst = models.CharField(
+        max_length=15,
+        null=True,
+        blank=True,
+        verbose_name="Invoice GST"
+    )
+    
+    grn_gst = models.CharField(
+        max_length=15,
+        null=True,
+        blank=True,
+        verbose_name="GRN GST"
+    )
+    
+    # === DATE VALIDATION ===
+    date_valid = models.BooleanField(
+        default=False,
+        verbose_name="Date Valid",
+        help_text="Whether invoice date <= GRN created date"
+    )
+    
+    invoice_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Invoice Date"
+    )
+    
+    grn_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="GRN Created Date"
+    )
+    
+    # === INVOICE AMOUNTS ===
+    invoice_subtotal = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name="Invoice Subtotal",
+        help_text="Invoice value without GST"
+    )
+    
+    invoice_cgst = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name="Invoice CGST"
+    )
+    
+    invoice_sgst = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name="Invoice SGST"
+    )
+    
+    invoice_igst = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name="Invoice IGST"
+    )
+    
+    invoice_total = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name="Invoice Total",
+        help_text="Total invoice amount including GST"
+    )
+    
+    # === GRN AGGREGATED AMOUNTS (SUM of all line items) ===
+    grn_subtotal = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name="GRN Subtotal",
+        help_text="Sum of all GRN line item subtotals"
+    )
+    
+    grn_cgst = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name="GRN Total CGST"
+    )
+    
+    grn_sgst = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name="GRN Total SGST"
+    )
+    
+    grn_igst = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name="GRN Total IGST"
+    )
+    
+    grn_total = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name="GRN Total",
+        help_text="Sum of all GRN line item totals"
+    )
+    
+    # === VARIANCE ANALYSIS ===
+    subtotal_variance = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Subtotal Variance",
+        help_text="Invoice Subtotal - GRN Subtotal"
+    )
+    
+    cgst_variance = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="CGST Variance"
+    )
+    
+    sgst_variance = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="SGST Variance"
+    )
+    
+    igst_variance = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="IGST Variance"
+    )
+    
+    total_variance = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Total Variance",
+        help_text="Invoice Total - GRN Total"
+    )
+    
+    # === VARIANCE PERCENTAGES ===
+    subtotal_variance_pct = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Subtotal Variance %",
+        help_text="Percentage variance in subtotal"
+    )
+    
+    total_variance_pct = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Total Variance %",
+        help_text="Percentage variance in total amount"
+    )
+    
+    # === SUMMARY INFORMATION ===
+    total_grn_line_items = models.IntegerField(
+        default=0,
+        verbose_name="Total GRN Line Items",
+        help_text="Number of GRN line items matched"
+    )
+    
+    matching_method = models.CharField(
+        max_length=50,
+        choices=[
+            ('exact_match', 'PO + GRN + Invoice Number'),
+            ('po_grn_match', 'PO + GRN Number'),
+            ('po_only_match', 'PO Number Only'),
+            ('manual_match', 'Manual Override'),
+        ],
+        null=True,
+        blank=True,
+        verbose_name="Matching Method"
+    )
+    
+    reconciliation_notes = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="Reconciliation Notes",
+        help_text="Additional notes about the reconciliation"
+    )
+    
+    # === TOLERANCE AND THRESHOLDS ===
+    tolerance_applied = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('2.00'),
+        verbose_name="Tolerance Applied (%)",
+        help_text="Tolerance percentage applied for matching"
+    )
+    
+    # === APPROVAL WORKFLOW ===
+    APPROVAL_STATUS_CHOICES = [
+        ('pending', 'Pending Review'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('escalated', 'Escalated'),
+    ]
+    
+    approval_status = models.CharField(
+        max_length=20,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='pending',
+        verbose_name="Approval Status"
+    )
+    
+    approved_by = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        verbose_name="Approved By"
+    )
+    
+    approved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Approved At"
+    )
+    
+    # === METADATA ===
+    reconciled_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Reconciled At"
+    )
+    
+    reconciled_by = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        verbose_name="Reconciled By"
+    )
+    
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Updated At"
+    )
+    
+    # === FLAGS ===
+    is_auto_matched = models.BooleanField(
+        default=True,
+        verbose_name="Auto Matched",
+        help_text="Whether this was automatically matched"
+    )
+    
+    requires_review = models.BooleanField(
+        default=False,
+        verbose_name="Requires Review",
+        help_text="Whether this reconciliation needs manual review"
+    )
+    
+    is_exception = models.BooleanField(
+        default=False,
+        verbose_name="Is Exception",
+        help_text="Whether this is flagged as an exception"
+    )
+
+    class Meta:
+        db_table = 'invoice_grn_reconciliation'
+        verbose_name = "Invoice GRN Reconciliation"
+        verbose_name_plural = "Invoice GRN Reconciliations"
+        ordering = ['-reconciled_at', 'po_number']
+        
+        indexes = [
+            models.Index(fields=['po_number']),
+            models.Index(fields=['grn_number']),
+            models.Index(fields=['invoice_number']),
+            models.Index(fields=['match_status']),
+            models.Index(fields=['approval_status']),
+            models.Index(fields=['vendor_match', 'gst_match', 'date_valid']),
+            models.Index(fields=['is_exception', 'requires_review']),
+            models.Index(fields=['reconciled_at']),
+        ]
+        
+        # Prevent duplicate reconciliations
+        unique_together = [
+            ['invoice_data', 'po_number']
+        ]
+
+    def __str__(self):
+        return f"Reconciliation: {self.po_number} - {self.match_status}"
+
+    @property
+    def is_within_tolerance(self):
+        """Check if total variance is within tolerance"""
+        if self.total_variance_pct is None:
+            return False
+        return abs(self.total_variance_pct) <= self.tolerance_applied
+
+    @property
+    def match_score(self):
+        """Calculate overall match score (0-100)"""
+        score = 0
+        
+        # Basic match (30 points)
+        if self.po_number:
+            score += 30
+            
+        # Vendor match (20 points)
+        if self.vendor_match:
+            score += 20
+            
+        # GST match (15 points)
+        if self.gst_match:
+            score += 15
+            
+        # Date validation (10 points)
+        if self.date_valid:
+            score += 10
+            
+        # Amount tolerance (25 points)
+        if self.is_within_tolerance:
+            score += 25
+        elif self.total_variance_pct is not None:
+            # Partial points based on how close to tolerance
+            variance_ratio = abs(self.total_variance_pct) / self.tolerance_applied
+            if variance_ratio <= 2.0:  # Within 2x tolerance
+                score += max(5, 25 - (variance_ratio * 10))
+        
+        return min(100, score)
+
+    @property
+    def exception_reasons(self):
+        """Get list of exception reasons"""
+        reasons = []
+        
+        if not self.vendor_match:
+            reasons.append("Vendor mismatch")
+        if not self.gst_match:
+            reasons.append("GST number mismatch")
+        if not self.date_valid:
+            reasons.append("Date validation failed")
+        if not self.is_within_tolerance:
+            reasons.append(f"Amount variance {self.total_variance_pct}% exceeds tolerance")
+        if self.total_grn_line_items == 0:
+            reasons.append("No matching GRN records found")
+            
+        return reasons
+
+    def save(self, *args, **kwargs):
+        """Override save to automatically set flags"""
+        # Set requires_review flag
+        self.requires_review = (
+            self.match_status in ['amount_mismatch', 'vendor_mismatch', 'multiple_grn'] or
+            not self.is_within_tolerance or
+            self.total_grn_line_items == 0
+        )
+        
+        # Set is_exception flag
+        self.is_exception = (
+            self.match_status in ['no_match', 'no_grn_found'] or
+            (self.total_variance_pct is not None and abs(self.total_variance_pct) > 10.0)
+        )
+        
+        super().save(*args, **kwargs)
+
+
+class ReconciliationBatch(models.Model):
+    """
+    Model to track reconciliation batches/runs
+    """
+    
+    batch_id = models.CharField(
+        max_length=100,
+        unique=True,
+        verbose_name="Batch ID"
+    )
+    
+    batch_name = models.CharField(
+        max_length=255,
+        verbose_name="Batch Name"
+    )
+    
+    # === PROCESSING DETAILS ===
+    total_invoices = models.IntegerField(
+        default=0,
+        verbose_name="Total Invoices"
+    )
+    
+    processed_invoices = models.IntegerField(
+        default=0,
+        verbose_name="Processed Invoices"
+    )
+    
+    perfect_matches = models.IntegerField(
+        default=0,
+        verbose_name="Perfect Matches"
+    )
+    
+    partial_matches = models.IntegerField(
+        default=0,
+        verbose_name="Partial Matches"
+    )
+    
+    exceptions = models.IntegerField(
+        default=0,
+        verbose_name="Exceptions"
+    )
+    
+    no_matches = models.IntegerField(
+        default=0,
+        verbose_name="No Matches"
+    )
+    
+    # === STATUS ===
+    STATUS_CHOICES = [
+        ('running', 'Running'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='running',
+        verbose_name="Status"
+    )
+    
+    error_message = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="Error Message"
+    )
+    
+    # === PARAMETERS ===
+    tolerance_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('2.00'),
+        verbose_name="Tolerance Percentage"
+    )
+    
+    date_tolerance_days = models.IntegerField(
+        default=30,
+        verbose_name="Date Tolerance (Days)"
+    )
+    
+    # === METADATA ===
+    started_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Started At"
+    )
+    
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Completed At"
+    )
+    
+    started_by = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        verbose_name="Started By"
+    )
+
+    class Meta:
+        db_table = 'reconciliation_batch'
+        verbose_name = "Reconciliation Batch"
+        verbose_name_plural = "Reconciliation Batches"
+        ordering = ['-started_at']
+
+    def __str__(self):
+        return f"Batch: {self.batch_name} - {self.status}"
+
+    @property
+    def success_rate(self):
+        """Calculate success rate percentage"""
+        if self.processed_invoices == 0:
+            return 0
+        return ((self.perfect_matches + self.partial_matches) / self.processed_invoices) * 100
+
+    @property
+    def duration(self):
+        """Calculate processing duration"""
+        if self.completed_at and self.started_at:
+            return self.completed_at - self.started_at
+        return None
